@@ -31,6 +31,26 @@ async function run() {
       const services = await cursor.toArray();
       res.send(services);
     });
+
+    app.get("/available", async (req, res) => {
+      const date = req.query.date || "May 21, 2022";
+      // step 1 : get all services
+      const services = await servicesCollection.find().toArray();
+      // step 2 : get the booking of that date
+      const query = { date: date };
+      const bookings = await bookingCollection.find(query).toArray();
+      // step 3 : for each service, find bookings for that services
+      services.forEach((service) => {
+        const serviceBookings = bookings.filter(
+          (b) => b.treatment === service.name
+        );
+        const booked = serviceBookings.map((s) => s.slot);
+        const available = service.slots.filter((s) => !booked.includes(s));
+        service.slots = available;
+      });
+      res.send(services);
+    });
+
     /**
      * Api naming convention
      * app.get('/booking') -- get all the booking on this collection or by filter / query get more than one
@@ -45,6 +65,7 @@ async function run() {
         treatment: booking.treatment,
         date: booking.date,
         patient: booking.patient,
+        slot: booking.slot,
       };
       const exist = await bookingCollection.findOne(query);
       if (exist) {
