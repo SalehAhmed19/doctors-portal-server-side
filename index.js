@@ -44,6 +44,18 @@ async function run() {
     const userCollection = client.db("doctors_portal").collection("user");
     const doctorCollection = client.db("doctors_portal").collection("doctor");
 
+    const verifyAdmin = async (req, res, next) => {
+      const initiator = req.decoded.email;
+      const initiatorAccount = await userCollection.findOne({
+        email: initiator,
+      });
+      if (initiatorAccount.role === "admin") {
+        next();
+      } else {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+    };
+
     app.get("/services", async (req, res) => {
       const query = {};
       const cursor = servicesCollection.find(query).project({ name: 1 });
@@ -51,22 +63,14 @@ async function run() {
       res.send(services);
     });
 
-    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
+    app.put("/user/admin/:email", verifyJWT, verifyAdmin, async (req, res) => {
       const email = req.params.email;
-      const initiator = req.decoded.email;
-      const initiatorAccount = await userCollection.findOne({
-        email: initiator,
-      });
-      if (initiatorAccount.role === "admin") {
-        const filter = { email: email };
-        const updateDoc = {
-          $set: { role: "admin" },
-        };
-        const result = await userCollection.updateOne(filter, updateDoc);
-        return res.send(result);
-      } else {
-        return res.status(403).send({ message: "Forbidden" });
-      }
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      return res.send(result);
     });
 
     app.put("/user/:email", async (req, res) => {
@@ -154,7 +158,7 @@ async function run() {
       res.send({ success: true, booking: result });
     });
 
-    app.post("/doctor", async (req, res) => {
+    app.post("/doctor", verifyJWT, verifyAdmin, async (req, res) => {
       const doctor = req.body;
       const result = await doctorCollection.insertOne(doctor);
       res.send(result);
